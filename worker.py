@@ -14,9 +14,9 @@ async def main(base_url, api_key, from_addr, to_addrs):
         "text": "This is a test email\n\n //Tester"
     }
     async with httpx.AsyncClient() as session:
-        async with session.post(base_url, auth=("api", api_key), data=payload) as resp:
-            resp.raise_for_status()
-            print(await resp.json())
+        resp = await session.post(base_url, auth=("api", api_key), data=payload)
+        resp.raise_for_status()
+        print(await resp.json())
 
 
 def parse_cli_args():

@@ -1,2 +1,2 @@
 yarl==1.6
-httpx=0.16
+httpx==0.16
