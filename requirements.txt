@@ -1,2 +1,2 @@
-aiohttp==3.7
 yarl==1.6
+httpx=0.16
