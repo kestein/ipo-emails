@@ -35,8 +35,8 @@ class NYSE:
     def __init__(self, name, symbol, amount_filed, shares_filed, price_range):
         self.name = name
         self.symbol = symbol
-        self.amount_filed = amount_filed
-        self.shares_filed = shares_filed
+        self.amount_filed = int(amount_filed) if int(amount_filed) == amount_filed else amount_filed
+        self.shares_filed = int(shares_filed) if int(shares_filed) == shares_filed else shares_filed
         self.price_range = price_range
 
     def __str__(self):
@@ -51,8 +51,8 @@ class NYSE:
 
 async def get_nyse(session):
     resp = await session.get(NYSE_LINK)
-    if resp.status != 200:
-        print(f"non 200  status {resp.status}: {resp.json()}")
+    if resp.status_code != 200:
+        print(f"non 200  status {resp.status_code}: {resp.json()}")
         return []
     payload = resp.json()
     return [
