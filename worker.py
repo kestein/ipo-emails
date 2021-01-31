@@ -2,6 +2,9 @@ import argparse
 import asyncio
 import sys
 
+import aiohttp
+import yarl
+
 async def main(base_url, api_key, from_addr, to_addrs):
     base_url = yarl.URL(base_url) / "messages"
     payload = {
