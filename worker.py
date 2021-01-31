@@ -2,7 +2,7 @@ import argparse
 import asyncio
 import sys
 
-import aiohttp
+from aiohttp import BasicAuth, ClientSession
 import yarl
 
 async def main(base_url, api_key, from_addr, to_addrs):
@@ -13,8 +13,8 @@ async def main(base_url, api_key, from_addr, to_addrs):
         "subject": "TEST",
         "text": "This is a test email\n\n //Tester"
     }
-    async with aiohttp.ClientSession() as session:
-        async with session.post(base_url, auth=("api", api_key), data=payload) as resp:
+    async with ClientSession() as session:
+        async with session.post(base_url, auth=BasicAuth("api", api_key), data=payload) as resp:
             resp.raise_for_status()
             print(await resp.json())
 
