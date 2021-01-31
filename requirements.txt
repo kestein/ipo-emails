@@ -1,1 +1,2 @@
 aiohttp==3.7
+yarl==1.6
