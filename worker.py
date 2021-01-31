@@ -5,6 +5,62 @@ import sys
 import httpx
 import yarl
 
+NYSE_LINK = "https://www.nyse.com/api/ipo-center/calendar"
+
+"""
+    {
+        "amended_file_dt": 1611792000000,
+        "amended_filing_vs_offer_px_desc": "N/A",
+        "bookrunners_parentCode": "MS, GS, JPM, BAML",
+        "current_file_price_range_usd": "20.00 - 23.00",
+        "current_filed_proceeds_with_overallotment_usd_amt": 370875000,
+        "current_shares_filed": 15000000,
+        "custom_group_exchange_nm": "NASDAQ",
+        "custom_group_industry_nm": "Healthcare",
+        "deal_status_desc": "Expected",
+        "deal_status_flg": "E",
+        "expected_dt_report": "02/03/2021",
+        "init_file_dt": 1610409600000,
+        "issuer_nm": "Sana Biotechnology, Inc.",
+        "offer_greenshoe_inc_proceeds_usd_amt": 0,
+        "offer_px_usd": 0,
+        "offer_size_inc_shoe_qty": 0,
+        "price_dt": null,
+        "symbol": "SANA",
+        "withdrawn_postponed_dt": null,
+        "withdrawn_postponed_txt": null
+    }
+"""
+class NYSE:
+    def __init__(self, name, symbol, amount_filed, shares_filed, price_range):
+        self.name = name
+        self.symbol = symbol
+        self.amount_filed = amount_filed
+        self.shares_filed = shares_filed
+        self.price_range = price_range
+
+    def __str__(self):
+        return "\n".join(
+            [
+                f"Company: {self.name} ({self.symbol})",
+                f"Offering: {self.shares_filed} / {self.amount_filed}",
+                f"Price: {self.price_range}"
+            ]
+        )
+
+
+async def get_nyse(session):
+    resp = await session.get(NYSE_LINK)
+    if resp.status != 200:
+        print(f"non 200  status {resp.status}: {resp.json()}")
+        return []
+    payload = resp.json()
+    return [
+        NYSE(c["issuer_nm"], c["symbol"], c["current_filed_proceeds_with_overallotment_usd_amt"], c["current_shares_filed"], c["current_file_price_range_usd"])
+        for c in payload["calendarList"]
+    ]
+
+
 async def main(base_url, api_key, from_addr, to_addrs):
     base_url = yarl.URL(base_url) / "messages"
     payload = {
