@@ -81,7 +81,7 @@ async def get_nyse(session):
 }
 """
 class Nasdaq:
-     def __init__(self, payload):
+    def __init__(self, payload):
         self.name = payload["companyName"]
         self.symbol = payload["proposedTickerSymbol"]
         amount_filed = "sharesOffered"
@@ -100,8 +100,9 @@ class Nasdaq:
 
 async def get_nasdaq(session):
     # TODO: Resolve what happens when a week spans 2 months
-    req = NASDAQ_LINK.with_query(("date", datetime.utcnow().strftime("%Y-%m"))
-    resp = await session.get(str(req)), headers={"user-agent": CHROME_UA})
+    month_qp = datetime.utcnow().strftime("%Y-%m")
+    req = NASDAQ_LINK.with_query(("date", month_qp))
+    resp = await session.get(str(req), headers={"user-agent": CHROME_UA})
     if resp.status_code != 200:
         print(f"non 200  status {resp.status_code}: {resp.json()}")
         return []
