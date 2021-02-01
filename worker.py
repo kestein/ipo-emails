@@ -32,12 +32,14 @@ NYSE_LINK = "https://www.nyse.com/api/ipo-center/calendar"
     }
 """
 class NYSE:
-    def __init__(self, name, symbol, amount_filed, shares_filed, price_range):
-        self.name = name
-        self.symbol = symbol
+    def __init__(self, payload):
+        self.name = payload["issuer_nm"]
+        self.symbol = payload["symbol"]
+        amount_filed = payload["current_filed_proceeds_with_overallotment_usd_amt"]
         self.amount_filed = int(amount_filed) if int(amount_filed) == amount_filed else amount_filed
+        chares_filed = payload["current_shares_filed"]
         self.shares_filed = int(shares_filed) if int(shares_filed) == shares_filed else shares_filed
-        self.price_range = price_range
+        self.price_range = payload["current_file_price_range_usd"]
 
     def __str__(self):
         return "\n".join(
@@ -55,10 +57,7 @@ async def get_nyse(session):
         print(f"non 200  status {resp.status_code}: {resp.json()}")
         return []
     payload = resp.json()
-    return [
-        NYSE(c["issuer_nm"], c["symbol"], c["current_filed_proceeds_with_overallotment_usd_amt"], c["current_shares_filed"], c["current_file_price_range_usd"])
-        for c in payload["calendarList"]
-    ]
+    return [NYSE(c) for c in payload["calendarList"]]
 
 
 async def main(base_url, api_key, from_addr, to_addrs):
