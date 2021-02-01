@@ -89,11 +89,10 @@ class Nasdaq:
         self.price_range = payload["proposedSharePrice"]
 
     def __str__(self):
-        company_name = 
         return "\n".join(
             [
                 make_company_line(self.name, self.symbol),
-                f"Offering: {self.shares_filed} / {self.amount_filed}",
+                f"Offering: {self.amount_filed}",
                 f"Price: {self.price_range}"
             ]
         )
