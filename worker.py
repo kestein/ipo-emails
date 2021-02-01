@@ -1,11 +1,15 @@
 import argparse
 import asyncio
+import datetime
 import sys
 
 import httpx
 import yarl
 
 NYSE_LINK = "https://www.nyse.com/api/ipo-center/calendar"
+NASDAQ_LINK = yarl.URL("https://api.nasdaq.com/api/ipo/calendar")
+# Nasdaq requests require a user agent that looks like a browser
+CHROME_UA = "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.104 Safari/537.36"
 
 
 def make_company_line(name, symbol) -> str:
@@ -95,6 +99,17 @@ class Nasdaq:
         )
 
 
+async def get_nasdaq(session):
+    # TODO: Resolve what happens when a week spans 2 months
+    req = NASDAQ_LINK.with_query(("date", datetime.utcnow().strftime("%Y-%m"))
+    resp = await session.get(str(req)), headers={"user-agent": CHROME_UA})
+    if resp.status_code != 200:
+        print(f"non 200  status {resp.status_code}: {resp.json()}")
+        return []
+    payload = resp.json()
+    return [Nasdaq(c) for c in payload["data"]["upcoming"]]
+
+
 async def main(base_url, api_key, from_addr, to_addrs):
     base_url = yarl.URL(base_url) / "messages"
     payload = {
@@ -103,7 +118,8 @@ async def main(base_url, api_key, from_addr, to_addrs):
         "subject": "NYSE IPOs"
     }
     async with httpx.AsyncClient() as session:
-        payload["text"] = "\n".join([str(c) for c in await get_nyse(session)])
+        nyse, nasdaq = await asyncio.gather(get_nasdaq(session), get_nyse(session))
+        payload["text"] = "\n\n".join([str(c) for c in chain(nyse, nasdaq)])
         resp = await session.post(str(base_url), auth=("api", api_key), data=payload)
         resp.raise_for_status()
         print(resp.json())
