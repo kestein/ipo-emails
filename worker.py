@@ -1,6 +1,7 @@
 import argparse
 import asyncio
-import datetime
+from datetime import datetime
+from itertools import chain
 import sys
 
 import httpx
@@ -45,7 +46,7 @@ class NYSE:
         self.symbol = payload["symbol"]
         amount_filed = payload["current_filed_proceeds_with_overallotment_usd_amt"]
         self.amount_filed = int(amount_filed) if int(amount_filed) == amount_filed else amount_filed
-        chares_filed = payload["current_shares_filed"]
+        shares_filed = payload["current_shares_filed"]
         self.shares_filed = int(shares_filed) if int(shares_filed) == shares_filed else shares_filed
         self.price_range = payload["current_file_price_range_usd"]
 
@@ -84,7 +85,7 @@ class Nasdaq:
     def __init__(self, payload):
         self.name = payload["companyName"]
         self.symbol = payload["proposedTickerSymbol"]
-        amount_filed = "sharesOffered"
+        amount_filed = payload["sharesOffered"].replace(",", "")
         self.amount_filed = int(amount_filed) if int(amount_filed) == amount_filed else amount_filed
         self.price_range = payload["proposedSharePrice"]
 
@@ -101,13 +102,13 @@ class Nasdaq:
 async def get_nasdaq(session):
     # TODO: Resolve what happens when a week spans 2 months
     month_qp = datetime.utcnow().strftime("%Y-%m")
-    req = NASDAQ_LINK.with_query(("date", month_qp))
+    req = NASDAQ_LINK.with_query({"date": month_qp})
     resp = await session.get(str(req), headers={"user-agent": CHROME_UA})
     if resp.status_code != 200:
         print(f"non 200  status {resp.status_code}: {resp.json()}")
         return []
     payload = resp.json()
-    return [Nasdaq(c) for c in payload["data"]["upcoming"]]
+    return [Nasdaq(c) for c in payload["data"]["upcoming"]["upcomingTable"]["rows"]]
 
 
 async def main(base_url, api_key, from_addr, to_addrs):
@@ -115,9 +116,9 @@ async def main(base_url, api_key, from_addr, to_addrs):
     payload = {
         "from": from_addr,
         "to": to_addrs,
-        "subject": "NYSE IPOs"
+        "subject": "Upcoming IPOs"
     }
-    async with httpx.AsyncClient() as session:
+    async with httpx.AsyncClient(timeout=15.0) as session:
         nyse, nasdaq = await asyncio.gather(get_nasdaq(session), get_nyse(session))
         payload["text"] = "\n\n".join([str(c) for c in chain(nyse, nasdaq)])
         resp = await session.post(str(base_url), auth=("api", api_key), data=payload)
