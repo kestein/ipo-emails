@@ -66,10 +66,10 @@ async def main(base_url, api_key, from_addr, to_addrs):
     payload = {
         "from": from_addr,
         "to": to_addrs,
-        "subject": "TEST",
-        "text": "This is a test email\n\n //Tester"
+        "subject": "NYSE IPOs"
     }
     async with httpx.AsyncClient() as session:
+        payload["text"] = "\n".join([str(c) for c in await get_nyse(session)])
         resp = await session.post(str(base_url), auth=("api", api_key), data=payload)
         resp.raise_for_status()
         print(resp.json())
