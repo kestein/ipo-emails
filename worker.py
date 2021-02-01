@@ -7,6 +7,10 @@ import yarl
 
 NYSE_LINK = "https://www.nyse.com/api/ipo-center/calendar"
 
+
+def make_company_line(name, symbol) -> str:
+    return f"Company: {name} ({symbol})" if symbol else f"Company: {name}"
+
 """
     {
         "amended_file_dt": 1611792000000,
@@ -44,7 +48,7 @@ class NYSE:
     def __str__(self):
         return "\n".join(
             [
-                f"Company: {self.name} ({self.symbol})",
+                make_company_line(self.name, self.symbol),
                 f"Offering: {self.shares_filed} / {self.amount_filed}",
                 f"Price: {self.price_range}"
             ]
@@ -58,6 +62,37 @@ async def get_nyse(session):
         return []
     payload = resp.json()
     return [NYSE(c) for c in payload["calendarList"]]
+
+
+"""
+{
+    "dealID": "373578-95383",
+    "proposedTickerSymbol": "ONTF", // nullable
+    "companyName": "ON24 INC",
+    "proposedExchange": "NYSE",
+    "proposedSharePrice": "45.00-50.00",
+    "sharesOffered": "8,600,977",
+    "expectedPriceDate": "02/03/2021",
+    "dollarValueOfSharesOffered": "$494,556,150.00"
+}
+"""
+class Nasdaq:
+     def __init__(self, payload):
+        self.name = payload["companyName"]
+        self.symbol = payload["proposedTickerSymbol"]
+        amount_filed = "sharesOffered"
+        self.amount_filed = int(amount_filed) if int(amount_filed) == amount_filed else amount_filed
+        self.price_range = payload["proposedSharePrice"]
+
+    def __str__(self):
+        company_name = 
+        return "\n".join(
+            [
+                make_company_line(self.name, self.symbol),
+                f"Offering: {self.shares_filed} / {self.amount_filed}",
+                f"Price: {self.price_range}"
+            ]
+        )
 
 
 async def main(base_url, api_key, from_addr, to_addrs):
