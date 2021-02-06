@@ -200,7 +200,10 @@ async def main(base_url, api_key, from_addr, to_addrs, ignore_redis):
         filtered_companies = chain(nyse, nasdaq)
         if dow != SUNDAY:
             filtered_companies = filter(partial(filter_company, dow=dow), filtered_companies)
-        payload["text"] = "\n\n".join([str(c) for c in filtered_companies])
+        email_text = "\n\n".join([str(c) for c in filtered_companies])
+        if not email_text:
+            email_text = "There are no IPOs scheduled for today"
+        payload["text"] = email_text
         resp = await session.post(str(base_url), auth=("api", api_key), data=payload)
         resp.raise_for_status()
         print(resp.json())
