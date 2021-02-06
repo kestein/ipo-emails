@@ -128,7 +128,7 @@ async def get_last_sent(redis) -> Optional[datetime]:
 async def set_last_sent(redis):
     if not redis:
         return
-    await redis.set(datetime.utcnow().isoformat())
+    await redis.set(LAST_SENT_KEY, datetime.utcnow().isoformat())
 
 
 async def main(base_url, api_key, from_addr, to_addrs, ignore_redis):
@@ -140,6 +140,7 @@ async def main(base_url, api_key, from_addr, to_addrs, ignore_redis):
         redis = await aioredis.create_redis_pool(redis_url)
 
     last_sent = await get_last_sent(redis)
+    print(last_sent)
     base_url = yarl.URL(base_url) / "messages"
     payload = {
         "from": from_addr,
@@ -165,8 +166,6 @@ def parse_cli_args():
     parser.add_argument('--ignore-redis', help='Do not check redis for last sent (debug')
 
     return parser.parse_args()
-
-
 
 if __name__ == "__main__":
     args = parse_cli_args()
