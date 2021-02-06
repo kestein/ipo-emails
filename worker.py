@@ -2,6 +2,7 @@ import argparse
 import asyncio
 from datetime import datetime, timedelta
 from itertools import chain
+from functools import partial
 import os
 import sys
 from typing import Optional
@@ -33,6 +34,10 @@ def parse_date(date_str) -> Optional[datetime]:
     except ValueError as e:
         print(str(e))
         return None
+
+
+def filter_company(company, dow=None):
+    return company.expected_date is not None and company.expected_date.isoweekday() == dow
 
 """
     {
@@ -192,8 +197,10 @@ async def main(base_url, api_key, from_addr, to_addrs, ignore_redis):
     async with httpx.AsyncClient(timeout=5.0) as session:
         nyse = await get_nyse(session)
         nasdaq = await get_nasdaq(session) if os.environ.get("ENABLE_NASDAQ_EMAIL") else []
-        company_filter = filter(lambda ipo: ipo.expected_date.isoweekday() == dow if dow != SUNDAY else True, chain(nyse, nasdaq))
-        payload["text"] = "\n\n".join([str(c) for c in company_filter])
+        filtered_companies = chain(nyse, nasdaq)
+        if dow != SUNDAY:
+            filtered_companies = filter(partial(filter_company, dow=dow), filtered_companies)
+        payload["text"] = "\n\n".join([str(c) for c in filtered_companies])
         resp = await session.post(str(base_url), auth=("api", api_key), data=payload)
         resp.raise_for_status()
         print(resp.json())
