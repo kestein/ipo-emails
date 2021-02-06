@@ -191,7 +191,7 @@ def parse_cli_args():
     parser.add_argument('--from-addr', type=str, help='The from email address')
     parser.add_argument('--base-api-url', type=str, help='Base email URL from mailgun')
     parser.add_argument('--api-key', type=str, help='Mailgun API key')
-    parser.add_argument('--ignore-redis', help='Do not check redis for last sent (debug')
+    parser.add_argument('--ignore-redis', action="store_true", help='Do not check redis for last sent (debug')
 
     return parser.parse_args()
 
