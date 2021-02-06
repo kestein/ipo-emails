@@ -76,17 +76,21 @@ async def get_nyse(session):
     "companyName": "ON24 INC",
     "proposedExchange": "NYSE",
     "proposedSharePrice": "45.00-50.00",
-    "sharesOffered": "8,600,977",
+    "sharesOffered": "8,600,977", // nullable
     "expectedPriceDate": "02/03/2021",
     "dollarValueOfSharesOffered": "$494,556,150.00"
 }
 """
 class Nasdaq:
     def __init__(self, payload):
+        print(payload)
         self.name = payload["companyName"]
         self.symbol = payload["proposedTickerSymbol"]
         amount_filed = payload["sharesOffered"].replace(",", "")
-        self.amount_filed = int(amount_filed) if int(amount_filed) == amount_filed else amount_filed
+        if amount_filed:
+            self.amount_filed = int(amount_filed) if int(amount_filed) == amount_filed else amount_filed
+        else:
+            self.amount_filed = "Unspecified"
         self.price_range = payload["proposedSharePrice"]
 
     def __str__(self):
@@ -118,7 +122,7 @@ async def main(base_url, api_key, from_addr, to_addrs):
         "to": to_addrs,
         "subject": "Upcoming IPOs"
     }
-    async with httpx.AsyncClient(timeout=15.0) as session:
+    async with httpx.AsyncClient(timeout=75.0) as session:
         nyse, nasdaq = await asyncio.gather(get_nasdaq(session), get_nyse(session))
         payload["text"] = "\n\n".join([str(c) for c in chain(nyse, nasdaq)])
         resp = await session.post(str(base_url), auth=("api", api_key), data=payload)
