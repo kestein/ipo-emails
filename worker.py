@@ -123,8 +123,8 @@ async def main(base_url, api_key, from_addr, to_addrs):
         "subject": "Upcoming IPOs"
     }
     async with httpx.AsyncClient(timeout=75.0) as session:
-        nyse, nasdaq = await asyncio.gather(get_nasdaq(session), get_nyse(session))
-        payload["text"] = "\n\n".join([str(c) for c in chain(nyse, nasdaq)])
+        nyse = await get_nyse(session)
+        payload["text"] = "\n\n".join([str(c) for c in nyse])
         resp = await session.post(str(base_url), auth=("api", api_key), data=payload)
         resp.raise_for_status()
         print(resp.json())
