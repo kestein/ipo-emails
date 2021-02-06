@@ -17,6 +17,8 @@ LAST_SENT_KEY = "email_last_sent"
 # Nasdaq requests require a user agent that looks like a browser
 CHROME_UA = "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.104 Safari/537.36"
 PACIFC_TIMEZONE = pytz.timezone("US/Pacific")
+SATURDAY = 6
+SUNDAY = 0
 
 
 def make_company_line(name, symbol) -> str:
@@ -113,6 +115,24 @@ def utcnow():
     return datetime.utcnow().replace(tzinfo=pytz.UTC)
 
 
+def pacnow():
+    utcnow().astimezone(PACIFC_TIMEZONE)
+
+
+async def is_sendable_time(redis) -> bool:
+    last_sent = await get_last_sent(redis)
+    if not last_sent:
+        return True
+
+    last_send_time = datetime.fromisoformat(last_sent).replace(tzinfo=pytz.UTC)
+    current_time_pac = pacnow()
+    if current_time_pac.isoweekday() == SATURDAY:
+        return False
+
+    # (b/w 8 and 10 when last send was a different day) or (no email for over a day)
+    return (8 <= current_time_pac.hour <= 10 and last_send_time.day != current_time_pac.day) or current_time_pac - last_send_time >= timedelta(days=1)
+
+
 async def get_nasdaq(session):
     # TODO: Resolve what happens when a week spans 2 months
     month_qp = datetime.utcnow().strftime("%Y-%m")
@@ -145,11 +165,9 @@ async def main(base_url, api_key, from_addr, to_addrs, ignore_redis):
     else:
         redis = await aioredis.create_redis_pool(redis_url)
 
-    if (last_sent := await get_last_sent(redis)):
-        last_send_time = datetime.fromisoformat(last_sent).replace(tzinfo=pytz.UTC)
-        if last_send_time - utcnow().astimezone(PACIFC_TIMEZONE) < timedelta(days=1):
-            print("Sent too recently. Skipping.")
-            return
+    if not await is_sendable_time(redis):
+        print("Not a sendable time")
+        return
 
     base_url = yarl.URL(base_url) / "messages"
     payload = {
