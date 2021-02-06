@@ -116,7 +116,7 @@ def utcnow():
 
 
 def pacnow():
-    utcnow().astimezone(PACIFC_TIMEZONE)
+    return utcnow().astimezone(PACIFC_TIMEZONE)
 
 
 async def is_sendable_time(redis) -> bool:
