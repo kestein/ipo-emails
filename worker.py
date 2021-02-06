@@ -1,13 +1,14 @@
 import argparse
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from itertools import chain
 import os
 import sys
 from typing import Optional
 
-import httpx
 import aioredis
+import httpx
+import pytz
 import yarl
 
 NYSE_LINK = "https://www.nyse.com/api/ipo-center/calendar"
@@ -15,6 +16,7 @@ NASDAQ_LINK = yarl.URL("https://api.nasdaq.com/api/ipo/calendar")
 LAST_SENT_KEY = "email_last_sent"
 # Nasdaq requests require a user agent that looks like a browser
 CHROME_UA = "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.104 Safari/537.36"
+PACIFC_TIMEZONE = pytz.timezone("US/Pacific")
 
 
 def make_company_line(name, symbol) -> str:
@@ -107,6 +109,10 @@ class Nasdaq:
         )
 
 
+def utcnow():
+    return datetime.utcnow().replace(tzinfo=pytz.UTC)
+
+
 async def get_nasdaq(session):
     # TODO: Resolve what happens when a week spans 2 months
     month_qp = datetime.utcnow().strftime("%Y-%m")
@@ -139,8 +145,12 @@ async def main(base_url, api_key, from_addr, to_addrs, ignore_redis):
     else:
         redis = await aioredis.create_redis_pool(redis_url)
 
-    last_sent = await get_last_sent(redis)
-    print(last_sent)
+    if (last_sent := await get_last_sent(redis)):
+        last_send_time = datetime.fromisoformat(last_sent).replace(tzinfo=pytz.UTC)
+        if last_send_time - utcnow().astimezone(PACIFC_TIMEZONE) < timedelta(days=1):
+            print("Sent too recently. Skipping.")
+            return
+
     base_url = yarl.URL(base_url) / "messages"
     payload = {
         "from": from_addr,
