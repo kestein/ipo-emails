@@ -2,6 +2,7 @@ import argparse
 import asyncio
 from datetime import datetime
 from itertools import chain
+import os
 import sys
 
 import httpx
@@ -122,8 +123,9 @@ async def main(base_url, api_key, from_addr, to_addrs):
         "to": to_addrs,
         "subject": "Upcoming IPOs"
     }
-    async with httpx.AsyncClient(timeout=75.0) as session:
-        nyse, nasdaq = await asyncio.gather(get_nasdaq(session), get_nyse(session))
+    async with httpx.AsyncClient(timeout=5.0) as session:
+        nyse = await get_nyse(session)
+        nasdaq = await get_nasdaq(session) if os.environ.get("ENABLE_NASDAQ_EMAIL") else []
         payload["text"] = "\n\n".join([str(c) for c in chain(nyse, nasdaq)])
         resp = await session.post(str(base_url), auth=("api", api_key), data=payload)
         resp.raise_for_status()
