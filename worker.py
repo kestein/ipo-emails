@@ -4,13 +4,15 @@ from datetime import datetime
 from itertools import chain
 import os
 import sys
+from typing import Optional
 
 import httpx
-import redis
+import aioredis
 import yarl
 
 NYSE_LINK = "https://www.nyse.com/api/ipo-center/calendar"
 NASDAQ_LINK = yarl.URL("https://api.nasdaq.com/api/ipo/calendar")
+LAST_SENT_KEY = "email_last_sent"
 # Nasdaq requests require a user agent that looks like a browser
 CHROME_UA = "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.104 Safari/537.36"
 
@@ -113,7 +115,27 @@ async def get_nasdaq(session):
     return [Nasdaq(c) for c in payload["data"]["upcoming"]["upcomingTable"]["rows"]]
 
 
-async def main(base_url, api_key, from_addr, to_addrs):
+async def get_last_sent(redis) -> Optional[datetime]:
+    if not redis:
+        return None
+    return await redis.get(LAST_SENT_KEY, encoding="utf-8")
+
+
+async def set_last_sent(redis):
+    if not redis:
+        return
+    await redis.set(datetime.utcnow().isoformat())
+
+
+async def main(base_url, api_key, from_addr, to_addrs, ignore_redis):
+    redis_url = os.environ.get("REDIS_URL")
+    if not redis_url or ignore_redis:
+        print(f"No redis server URL set / ignore redis is {ignore_redis}")
+        redis = None
+    else:
+        redis = await aioredis.create_redis_pool(redis_url)
+
+    last_sent = await get_last_sent(redis)
     base_url = yarl.URL(base_url) / "messages"
     payload = {
         "from": from_addr,
@@ -126,6 +148,7 @@ async def main(base_url, api_key, from_addr, to_addrs):
         resp = await session.post(str(base_url), auth=("api", api_key), data=payload)
         resp.raise_for_status()
         print(resp.json())
+    await set_last_sent(redis)
 
 
 def parse_cli_args():
@@ -134,6 +157,7 @@ def parse_cli_args():
     parser.add_argument('--from-addr', type=str, help='The from email address')
     parser.add_argument('--base-api-url', type=str, help='Base email URL from mailgun')
     parser.add_argument('--api-key', type=str, help='Mailgun API key')
+    parser.add_argument('--ignore-redis', help='Do not check redis for last sent (debug')
 
     return parser.parse_args()
 
@@ -142,4 +166,4 @@ def parse_cli_args():
 if __name__ == "__main__":
     args = parse_cli_args()
 
-    asyncio.run(main(args.base_api_url, args.api_key, args.from_addr, args.to_addrs))
+    asyncio.run(main(args.base_api_url, args.api_key, args.from_addr, args.to_addrs, args.ignore_redis))
