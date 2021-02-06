@@ -24,6 +24,16 @@ SUNDAY = 0
 def make_company_line(name, symbol) -> str:
     return f"Company: {name} ({symbol})" if symbol else f"Company: {name}"
 
+
+def parse_date(date_str) -> Optional[datetime]:
+    if not date_str:
+        return None
+    try:
+        datetime.strptime(date_str, "%m/%d/%Y")
+    except ValueError as e:
+        print(str(e))
+        return None
+
 """
     {
         "amended_file_dt": 1611792000000,
@@ -57,6 +67,7 @@ class NYSE:
         shares_filed = payload["current_shares_filed"]
         self.shares_filed = int(shares_filed) if int(shares_filed) == shares_filed else shares_filed
         self.price_range = payload["current_file_price_range_usd"]
+        self.expected_date = parse_date(payload["expected_dt_report"])
 
     def __str__(self):
         return "\n".join(
@@ -100,6 +111,7 @@ class Nasdaq:
         else:
             self.amount_filed = "Unspecified"
         self.price_range = payload["proposedSharePrice"]
+        self.expected_date = parse_date(payload["expectedPriceDate"])
 
     def __str__(self):
         return "\n".join(
@@ -170,15 +182,18 @@ async def main(base_url, api_key, from_addr, to_addrs, ignore_redis):
         return
 
     base_url = yarl.URL(base_url) / "messages"
+    dow = pacnow().isoweekday()
+    daystr = "This week" if dow == SUNDAY else "Today"
     payload = {
         "from": from_addr,
         "to": to_addrs,
-        "subject": "Upcoming IPOs"
+        "subject": f"{daystr}'s IPOs"
     }
     async with httpx.AsyncClient(timeout=5.0) as session:
         nyse = await get_nyse(session)
         nasdaq = await get_nasdaq(session) if os.environ.get("ENABLE_NASDAQ_EMAIL") else []
-        payload["text"] = "\n\n".join([str(c) for c in chain(nyse, nasdaq)])
+        company_filter = filter(lambda ipo: ipo.expected_date.isoweekday() == dow if dow != SUNDAY else True, chain(nyse, nasdaq))
+        payload["text"] = "\n\n".join([str(c) for c in company_filter])
         resp = await session.post(str(base_url), auth=("api", api_key), data=payload)
         resp.raise_for_status()
         print(resp.json())
