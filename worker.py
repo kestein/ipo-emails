@@ -2,9 +2,11 @@ import argparse
 import asyncio
 from datetime import datetime
 from itertools import chain
+import os
 import sys
 
 import httpx
+import redis
 import yarl
 
 NYSE_LINK = "https://www.nyse.com/api/ipo-center/calendar"
