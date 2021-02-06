@@ -1,21 +1,43 @@
 import argparse
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from itertools import chain
+from functools import partial
 import os
 import sys
+from typing import Optional
 
+import aioredis
 import httpx
+import pytz
 import yarl
 
 NYSE_LINK = "https://www.nyse.com/api/ipo-center/calendar"
 NASDAQ_LINK = yarl.URL("https://api.nasdaq.com/api/ipo/calendar")
+LAST_SENT_KEY = "email_last_sent"
 # Nasdaq requests require a user agent that looks like a browser
 CHROME_UA = "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.104 Safari/537.36"
+PACIFC_TIMEZONE = pytz.timezone("US/Pacific")
+SATURDAY = 6
+SUNDAY = 0
 
 
 def make_company_line(name, symbol) -> str:
     return f"Company: {name} ({symbol})" if symbol else f"Company: {name}"
+
+
+def parse_date(date_str) -> Optional[datetime]:
+    if not date_str:
+        return None
+    try:
+        datetime.strptime(date_str, "%m/%d/%Y")
+    except ValueError as e:
+        print(str(e))
+        return None
+
+
+def filter_company(company, dow=None):
+    return company.expected_date is not None and company.expected_date.isoweekday() == dow
 
 """
     {
@@ -50,6 +72,7 @@ class NYSE:
         shares_filed = payload["current_shares_filed"]
         self.shares_filed = int(shares_filed) if int(shares_filed) == shares_filed else shares_filed
         self.price_range = payload["current_file_price_range_usd"]
+        self.expected_date = parse_date(payload["expected_dt_report"])
 
     def __str__(self):
         return "\n".join(
@@ -93,6 +116,7 @@ class Nasdaq:
         else:
             self.amount_filed = "Unspecified"
         self.price_range = payload["proposedSharePrice"]
+        self.expected_date = parse_date(payload["expectedPriceDate"])
 
     def __str__(self):
         return "\n".join(
@@ -102,6 +126,28 @@ class Nasdaq:
                 f"Price: {self.price_range}"
             ]
         )
+
+
+def utcnow():
+    return datetime.utcnow().replace(tzinfo=pytz.UTC)
+
+
+def pacnow():
+    return utcnow().astimezone(PACIFC_TIMEZONE)
+
+
+async def is_sendable_time(redis) -> bool:
+    last_sent = await get_last_sent(redis)
+    if not last_sent:
+        return True
+
+    last_send_time = datetime.fromisoformat(last_sent).replace(tzinfo=pytz.UTC)
+    current_time_pac = pacnow()
+    if current_time_pac.isoweekday() == SATURDAY:
+        return False
+
+    # (b/w 8 and 10 when last send was a different day) or (no email for over a day)
+    return (8 <= current_time_pac.hour <= 10 and last_send_time.day != current_time_pac.day) or current_time_pac - last_send_time >= timedelta(days=1)
 
 
 async def get_nasdaq(session):
@@ -116,20 +162,52 @@ async def get_nasdaq(session):
     return [Nasdaq(c) for c in payload["data"]["upcoming"]["upcomingTable"]["rows"]]
 
 
-async def main(base_url, api_key, from_addr, to_addrs):
+async def get_last_sent(redis) -> Optional[datetime]:
+    if not redis:
+        return None
+    return await redis.get(LAST_SENT_KEY, encoding="utf-8")
+
+
+async def set_last_sent(redis):
+    if not redis:
+        return
+    await redis.set(LAST_SENT_KEY, datetime.utcnow().isoformat())
+
+
+async def main(base_url, api_key, from_addr, to_addrs, ignore_redis):
+    redis_url = os.environ.get("REDIS_URL")
+    if not redis_url or ignore_redis:
+        print(f"No redis server URL set / ignore redis is {ignore_redis}")
+        redis = None
+    else:
+        redis = await aioredis.create_redis_pool(redis_url)
+
+    if not await is_sendable_time(redis):
+        print("Not a sendable time")
+        return
+
     base_url = yarl.URL(base_url) / "messages"
+    dow = pacnow().isoweekday()
+    daystr = "This week" if dow == SUNDAY else "Today"
     payload = {
         "from": from_addr,
         "to": to_addrs,
-        "subject": "Upcoming IPOs"
+        "subject": f"{daystr}'s IPOs"
     }
     async with httpx.AsyncClient(timeout=5.0) as session:
         nyse = await get_nyse(session)
         nasdaq = await get_nasdaq(session) if os.environ.get("ENABLE_NASDAQ_EMAIL") else []
-        payload["text"] = "\n\n".join([str(c) for c in chain(nyse, nasdaq)])
+        filtered_companies = chain(nyse, nasdaq)
+        if dow != SUNDAY:
+            filtered_companies = filter(partial(filter_company, dow=dow), filtered_companies)
+        email_text = "\n\n".join([str(c) for c in filtered_companies])
+        if not email_text:
+            email_text = "There are no IPOs scheduled for today"
+        payload["text"] = email_text
         resp = await session.post(str(base_url), auth=("api", api_key), data=payload)
         resp.raise_for_status()
         print(resp.json())
+    await set_last_sent(redis)
 
 
 def parse_cli_args():
@@ -138,12 +216,11 @@ def parse_cli_args():
     parser.add_argument('--from-addr', type=str, help='The from email address')
     parser.add_argument('--base-api-url', type=str, help='Base email URL from mailgun')
     parser.add_argument('--api-key', type=str, help='Mailgun API key')
+    parser.add_argument('--ignore-redis', action="store_true", help='Do not check redis for last sent (debug')
 
     return parser.parse_args()
-
-
 
 if __name__ == "__main__":
     args = parse_cli_args()
 
-    asyncio.run(main(args.base_api_url, args.api_key, args.from_addr, args.to_addrs))
+    asyncio.run(main(args.base_api_url, args.api_key, args.from_addr, args.to_addrs, args.ignore_redis))
