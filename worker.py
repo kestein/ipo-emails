@@ -15,6 +15,7 @@ NYSE_LINK = "https://www.nyse.com/api/ipo-center/calendar"
 NASDAQ_LINK = yarl.URL("https://api.nasdaq.com/api/ipo/calendar")
 # Nasdaq requests require a user agent that looks like a browser
 CHROME_UA = "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.104 Safari/537.36"
+PACIFC_TIMEZONE = pytz.timezone("US/Pacific")
 SATURDAY = 6
 SUNDAY = 7
 
