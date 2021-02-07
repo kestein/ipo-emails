@@ -19,7 +19,7 @@ LAST_SENT_KEY = "email_last_sent"
 CHROME_UA = "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.104 Safari/537.36"
 PACIFC_TIMEZONE = pytz.timezone("US/Pacific")
 SATURDAY = 6
-SUNDAY = 0
+SUNDAY = 7
 
 
 def make_company_line(name, symbol) -> str:
