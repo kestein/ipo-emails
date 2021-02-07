@@ -7,6 +7,7 @@ import os
 import sys
 from typing import Optional
 
+import boto3
 import httpx
 import pytz
 import yarl
@@ -146,6 +147,17 @@ async def get_nasdaq(session):
     return [Nasdaq(c) for c in payload["data"]["upcoming"]["upcomingTable"]["rows"]]
 
 
+def send_email(payload):
+    try:
+        client = boto3.client("ses")
+        resp = client.send_email(**payload)
+    except Exception as e:
+        print(f"Unable to send email {str(e)}")
+        print(payload)
+        resp = None
+    return resp
+
+
 def get_email_addrs():
     from_addr = os.environ["FROM_EMAIL_ADDR"]
     to_addrs = os.environ["TO_EMAIL_ADDRS"].split(",")
@@ -167,7 +179,7 @@ async def async_main():
     if dow != SUNDAY:
         filtered_companies = filter(partial(filter_company, dow=dow), filtered_companies)
 
-    daystr = "This week" if dow == SUNDAY else "Today"
+    daystr = "Upcoming" if dow == SUNDAY else "Today's"
     email_text = "\n\n".join([str(c) for c in filtered_companies])
     if not email_text:
         email_text = "There are no IPOs scheduled for today"
@@ -181,7 +193,7 @@ async def async_main():
         },
         Message={
             "Subject": {
-               "Data": f"{daystr}'s IPOs",
+               "Data": f"{daystr} IPOs",
                "Charset": "UTF-8"
             },
             "Body": {
@@ -192,7 +204,8 @@ async def async_main():
             }
         }
     )
-    print(payload)
+    resp = send_email(payload)
+    print(resp)
 
 
 def main(event, context):
